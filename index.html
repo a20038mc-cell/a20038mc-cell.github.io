@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>収支報告書 読取アプリ (決定版)</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="tesseract.min.js"></script>
+    <script async src="opencv.js"></script>
+</head>
+<body>
+
+    <div id="mode-selection">
+        <h2>収支報告書 OCR</h2>
+        <p>読み取る書類を選んでください</p>
+        <button id="select-hyoushi">表紙 (基本情報)</button>
+        <button id="select-shishutsu">支出明細 (レシート)</button>
+    </div>
+
+    <div id="app-container">
+        
+        <div id="control-frame">
+            <h3>コントロール</h3>
+            <label id="status-label">準備中...</label>
+            
+            <div class="control-group">
+                <p>■ 入力ソース切替</p>
+                <button id="btn-camera-mode" class="mode-btn">📷 カメラを使う</button>
+                <button id="btn-file-mode" class="mode-btn">📁 画像をアップロード</button>
+                <input type="file" id="file-input" accept="image/*">
+            </div>
+
+            <div class="control-group">
+                <p>■ 読取項目 (タップしてスキャン)</p>
+                <div id="dynamic-target-buttons"></div>
+            </div>
+            
+            <div class="control-group">
+                <p>■ 結果確認</p>
+                <div id="dynamic-result-labels"></div>
+            </div>
+            
+            <hr>
+            <button id="save-button" class="primary-btn">Google Sheetsへ保存</button>
+            <button id="back-button" class="secondary-btn">トップに戻る</button>
+        </div>
+
+        <div id="camera-frame">
+            <div id="preview-container">
+                <video id="video" autoplay playsinline></video>
+                <img id="uploaded-image" alt="プレビュー">
+                <canvas id="selection-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
