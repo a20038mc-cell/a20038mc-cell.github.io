@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>収支報告書 読取アプリ (決定版)</title>
+    
     <link rel="stylesheet" href="style.css">
     
     <script src="tesseract.min.js"></script>
-    <script async src="opencv.js"></script>
+    <script async src="opencv.js" onload="console.log('OpenCV.js loaded.')"></script>
 </head>
 <body>
 
@@ -18,7 +19,7 @@
         <button id="select-shishutsu">支出明細 (レシート)</button>
     </div>
 
-    <div id="app-container">
+    <div id="app-container" style="display: none;">
         
         <div id="control-frame">
             <h3>コントロール</h3>
@@ -26,9 +27,9 @@
             
             <div class="control-group">
                 <p>■ 入力ソース切替</p>
-                <button id="btn-camera-mode" class="mode-btn">📷 カメラを使う</button>
+                <button id="btn-camera-mode" class="mode-btn active">📷 カメラを使う</button>
                 <button id="btn-file-mode" class="mode-btn">📁 画像をアップロード</button>
-                <input type="file" id="file-input" accept="image/*">
+                <input type="file" id="file-input" accept="image/*" style="display: none;">
             </div>
 
             <div class="control-group">
@@ -48,8 +49,8 @@
 
         <div id="camera-frame">
             <div id="preview-container">
-                <video id="video" autoplay playsinline></video>
-                <img id="uploaded-image" alt="プレビュー">
+                <video id="video" autoplay playsinline style="display: block;"></video>
+                <img id="uploaded-image" alt="プレビュー" style="display: none;">
                 <canvas id="selection-canvas"></canvas>
             </div>
         </div>
