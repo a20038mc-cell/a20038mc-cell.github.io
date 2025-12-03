@@ -8,7 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
         onRuntimeInitialized: () => {
             isCvLoaded = true;
             console.log("OpenCV ready.");
-            // OpenCVがロードされた後に、初期状態のステータスを設定
             DOM.status.innerText = "書類を選択してください";
         }
     };
@@ -34,23 +33,27 @@ document.addEventListener("DOMContentLoaded", () => {
         
         status: document.getElementById('status-label'),
         targetArea: document.getElementById('dynamic-target-buttons'),
-        resultArea: document.getElementById('dynamic-result-labels')
+        resultArea: document.getElementById('dynamic-result-labels'),
+        
+        // ★追加: カメラ選択UI要素
+        cameraSelectGroup: document.getElementById('camera-select-group'),
+        cameraSelect: document.getElementById('camera-select'),
     };
 
     // アプリの状態
     const State = {
-        sheetName: null,      // 'OCR-Data' or '支払明細'
-        definitions: [],      // 現在の項目の定義
-        currentTarget: null,  // 今読み取っている項目のキー
-        ocrResults: {},       // 読取結果
-        stream: null,         // カメラストリーム
-        isCameraMode: true,   // true=カメラ, false=ファイル
-        isProcessing: false,  // 処理中フラグ
-        rafId: null,          // アニメーションフレームID
-        isOCRReady: false,    // Tesseract準備完了フラグ
+        sheetName: null,      
+        definitions: [],      
+        currentTarget: null,  
+        ocrResults: {},       
+        stream: null,         
+        isCameraMode: true,   
+        isProcessing: false,  
+        rafId: null,          
+        isOCRReady: false,    
     };
 
-    // 読み取り項目の定義 (変更なし)
+    // 読み取り項目の定義 (前と同じ)
     const DEFINITIONS = {
         "OCR-Data": [
             { key: "dantai_name", label: "団体名称" },
@@ -61,14 +64,14 @@ document.addEventListener("DOMContentLoaded", () => {
         ],
         "支払明細": [
             { key: "no", label: "番号(No)" },
-            { key: "kingaku", label: "金額" }, // 数字のみ
-            { key: "shishutsu_date", label: "支出年月日" }, // 日付のみ
+            { key: "kingaku", label: "金額" },
+            { key: "shishutsu_date", label: "支出年月日" },
             { key: "shishutsu_mokuteki", label: "支出の目的" },
             { key: "shishutsu_saki", label: "支出先名称" }
         ]
     };
 
-    // --- 1. OCRエンジンの管理 ---
+    // --- 1. OCRエンジンの管理 (前と同じ) ---
     const OCR = {
         worker: null,
         init: async () => {
@@ -76,14 +79,12 @@ document.addEventListener("DOMContentLoaded", () => {
             DOM.status.innerText = "OCRエンジン起動中...";
             
             try {
-                // workerPathはTesseract.jsのバージョンや配置によって異なる場合があります
                 OCR.worker = await Tesseract.createWorker('jpn', 1, {
                     logger: m => {
                         if (m.status === 'recognizing text') {
                             DOM.status.innerText = `読取中... ${(m.progress * 100).toFixed(0)}%`;
                         }
                     },
-                    // workerPath: 'worker.min.js' // 必要であれば指定を解除
                 });
                 State.isOCRReady = true;
                 DOM.status.innerText = "OCR準備完了";
@@ -95,7 +96,6 @@ document.addEventListener("DOMContentLoaded", () => {
         recognize: async (canvas, options) => {
             if (!State.isOCRReady) await OCR.init();
             
-            // パラメータをセット
             await OCR.worker.setParameters({
                 tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
                 ...options
@@ -106,15 +106,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // --- 2. 画像処理と読取実行 ---
+    // --- 2. 画像処理と読取実行 (前と同じ) ---
     const Processor = {
         execute: async () => {
-            // OpenCVとOCRの両方が必要
             if (State.isProcessing || !State.currentTarget || !isCvLoaded || !State.isOCRReady) return;
             
             const source = State.isCameraMode ? DOM.video : DOM.image;
             
-            // ソースの有効性チェック
             if (State.isCameraMode && DOM.video.readyState !== 4) {
                  DOM.status.innerText = "カメラの映像を待機中...";
                  return;
@@ -125,13 +123,11 @@ document.addEventListener("DOMContentLoaded", () => {
             let srcMat = null, grayMat = null, binMat = null, roiMat = null;
 
             try {
-                // 現在の表示サイズを取得 (videoWidth/videoHeightはカメラモードでの内部解像度)
                 const w = State.isCameraMode ? DOM.video.videoWidth : DOM.image.naturalWidth;
                 const h = State.isCameraMode ? DOM.video.videoHeight : DOM.image.naturalHeight;
                 
                 if (!w || !h || w === 0 || h === 0) throw new Error("ソースサイズ取得失敗");
 
-                // OpenCV用にCanvasへ描画 (高解像度でキャプチャ)
                 const capCanvas = document.createElement('canvas');
                 capCanvas.width = w;
                 capCanvas.height = h;
@@ -140,22 +136,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 srcMat = cv.imread(capCanvas);
 
-                // 赤枠エリア (ROI) の計算:
-                // DOM要素のサイズではなく、キャプチャした画像の実サイズで計算する
                 const displayW = DOM.canvas.offsetWidth;
                 const displayH = DOM.canvas.offsetHeight;
                 
-                // 画面表示サイズと画像実サイズの比率を計算 (キャンバス描画用の赤枠に合わせる)
                 const scaleX = w / displayW;
                 const scaleY = h / displayH;
 
-                // 赤枠は常に表示の中央 60% x 100px
                 const rectW_disp = displayW * 0.6;
                 const rectH_disp = 100;
                 const rectX_disp = (displayW - rectW_disp) / 2;
                 const rectY_disp = (displayH - rectH_disp) / 2;
                 
-                // 画像の実サイズにおけるROIを計算
                 const rectX = Math.floor(rectX_disp * scaleX);
                 const rectY = Math.floor(rectY_disp * scaleY);
                 const rectWidth = Math.floor(rectW_disp * scaleX);
@@ -163,35 +154,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (rectX < 0 || rectY < 0) throw new Error("計算エラー");
 
-                // 切り出し
                 let roiRect = new cv.Rect(rectX, rectY, rectWidth, rectHeight);
                 roiMat = srcMat.roi(roiRect);
 
-                // --- 画像処理パイプライン ---
-                // 1. グレースケール
                 grayMat = new cv.Mat();
                 cv.cvtColor(roiMat, grayMat, cv.COLOR_RGBA2GRAY);
                 
-                // 2. ノイズ除去
                 binMat = new cv.Mat();
                 cv.medianBlur(grayMat, binMat, 3);
-                grayMat.delete(); // 中間Matは解放
+                grayMat.delete();
 
-                // 3. 適応的二値化
                 cv.adaptiveThreshold(binMat, binMat, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 15, 8);
 
-                // 4. 2倍拡大
                 let dsize = new cv.Size(binMat.cols * 2, binMat.rows * 2);
                 cv.resize(binMat, binMat, dsize, 0, 0, cv.INTER_LINEAR);
 
-                // 確認用Canvas作成 (OCRに渡す)
                 const finalCanvas = document.createElement('canvas');
                 cv.imshow(finalCanvas, binMat);
 
-                // --- 項目別パラメータ設定 ---
                 const definition = State.definitions.find(d => d.key === State.currentTarget);
                 const label = definition.label;
-                let opts = { tessedit_char_whitelist: '' }; // ホワイトリスト初期化
+                let opts = { tessedit_char_whitelist: '' };
 
                 if (label.includes("金額")) {
                     opts.tessedit_char_whitelist = '0123456789,¥円';
@@ -201,7 +184,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     opts.tessedit_char_whitelist = '0123456789';
                 }
 
-                // OCR実行
                 const rawText = await OCR.recognize(finalCanvas, opts);
                 const cleanText = rawText.replace(/\s+/g, '').trim();
 
@@ -209,28 +191,24 @@ document.addEventListener("DOMContentLoaded", () => {
                     UIManager.setResult(State.currentTarget, cleanText);
                     DOM.status.innerText = `読取成功: ${cleanText}`;
                     
-                    // 連続読取防止
                     await new Promise(r => setTimeout(r, State.isCameraMode ? 1500 : 500));
                 } else {
                     if (!State.isCameraMode) DOM.status.innerText = "文字が見つかりません (枠に合わせてください)";
-                    // カメラモードでは状態をリセットしない
                 }
 
             } catch (err) {
                 console.error("Processor Execution Error:", err);
                 DOM.status.innerText = "処理エラー: コンソールを確認してください";
             } finally {
-                // メモリ解放
                 if (srcMat) srcMat.delete();
                 if (roiMat) roiMat.delete();
-                // if (grayMat) grayMat.delete(); // grayMatは既に解放済み
                 if (binMat) binMat.delete();
                 State.isProcessing = false;
             }
         }
     };
 
-    // --- 3. UIの制御 ---
+    // --- 3. UIの制御 (前と同じ) ---
     const UIManager = {
         init: (sheetName) => {
             State.sheetName = sheetName;
@@ -238,22 +216,18 @@ document.addEventListener("DOMContentLoaded", () => {
             State.ocrResults = {};
             State.currentTarget = null;
 
-            // 画面切り替え
             DOM.modeSelection.style.display = 'none';
             DOM.appContainer.style.display = 'flex';
 
-            // ボタン生成と結果欄クリア
             DOM.targetArea.innerHTML = '';
             DOM.resultArea.innerHTML = '';
             
             State.definitions.forEach(def => {
-                // ターゲットボタン
                 const btn = document.createElement('button');
                 btn.textContent = def.label;
                 btn.onclick = () => UIManager.selectTarget(def.key);
                 DOM.targetArea.appendChild(btn);
 
-                // 結果欄
                 const div = document.createElement('div');
                 div.className = 'result-item';
                 div.innerHTML = `
@@ -263,21 +237,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 DOM.resultArea.appendChild(div);
             });
 
-            // OCRエンジンを先に起動開始
             OCR.init();
 
-            // デフォルトはカメラモード
             Actions.switchMode(true);
         },
 
         selectTarget: (key) => {
-            // 現在のターゲットが同じなら何もしない
             if (State.currentTarget === key && State.isCameraMode) return;
 
             State.currentTarget = key;
             const label = State.definitions.find(d => d.key === key).label;
             
-            // ボタンのハイライト
             Array.from(DOM.targetArea.children).forEach(btn => {
                 btn.classList.remove('active-target');
                 btn.style.backgroundColor = ''; 
@@ -289,7 +259,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             DOM.status.innerText = `「${label}」をスキャン中...`;
 
-            // ファイルモードなら、ボタンを押した瞬間に実行
             if (!State.isCameraMode) {
                 Processor.execute();
             }
@@ -304,10 +273,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- 4. アクション (カメラ/ファイル/保存) ---
     const Actions = {
+        
+        // ★新規追加: カメラデバイスを列挙し、ドロップダウンを構築する関数
+        enumerateCameras: async (selectedDeviceId) => {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                DOM.cameraSelect.innerHTML = '';
+                
+                // カメラが2つ以上ある場合にのみ選択UIを表示
+                if (videoDevices.length > 1) {
+                    DOM.cameraSelectGroup.style.display = 'block';
+                } else {
+                    DOM.cameraSelectGroup.style.display = 'none';
+                }
+
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${index + 1}`; 
+                    DOM.cameraSelect.appendChild(option);
+                });
+                
+                // 起動したカメラを選択状態にする
+                if (selectedDeviceId) DOM.cameraSelect.value = selectedDeviceId;
+
+            } catch (err) {
+                console.error("enumerateDevices Error:", err);
+            }
+        },
+
+        // ★修正: カメラ選択UIの表示切り替えと startCamera 呼び出しの変更
         switchMode: (isCamera) => {
             State.isCameraMode = isCamera;
             
-            // UIの状態更新
             DOM.btnCamera.classList.toggle('active', isCamera);
             DOM.btnFile.classList.toggle('active', !isCamera);
             
@@ -315,41 +315,58 @@ document.addEventListener("DOMContentLoaded", () => {
                 // カメラモード
                 DOM.image.style.display = 'none';
                 DOM.video.style.display = 'block';
+                // 選択肢がある場合は選択UIを表示
+                DOM.cameraSelectGroup.style.display = DOM.cameraSelect.options.length > 1 ? 'block' : 'none';
                 Actions.startCamera();
-                // 監視ループを再開
                 if (!State.rafId) Actions.drawGuideLoop();
             } else {
                 // ファイルモード
                 Actions.stopCamera();
                 DOM.video.style.display = 'none';
                 DOM.image.style.display = DOM.image.src ? 'block' : 'none';
+                DOM.cameraSelectGroup.style.display = 'none';
                 DOM.status.innerText = DOM.image.src ? "画像読込完了。項目ボタンを押してOCR実行" : "画像をアップロードしてください";
             }
         },
 
-        startCamera: async () => {
-            if (State.stream) return; // すでに起動していたら何もしない
+        // ★修正: 選択されたカメラIDを使ってストリームを開始するロジック
+        startCamera: async (deviceId) => {
+            Actions.stopCamera(); 
+            
             DOM.status.innerText = "カメラ起動中...";
+
+            // 選択されたデバイスID、またはドロップダウンに値があればそのIDを使用
+            const targetDeviceId = deviceId || (DOM.cameraSelect.options.length > 0 ? DOM.cameraSelect.value : null);
+
+            const constraints = {
+                video: {
+                    // 特定のカメラIDが指定されている場合は、そのIDをexactで要求
+                    deviceId: targetDeviceId ? { exact: targetDeviceId } : undefined,
+                    // IDがない場合は、背面カメラを優先
+                    facingMode: targetDeviceId ? undefined : "environment" 
+                }
+            };
+
             try {
-                // ★最重要の変更点: 最小限の要求 'video: true' で起動を試みる
-                // facingMode: "environment" も削除し、ブラウザのデフォルトに任せる (通常は背面)
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: true 
-                    // 以前の設定: video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
-                });
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
                 DOM.video.srcObject = stream;
-                // play()は自動再生(autoplay)でカバーされますが、明示的に呼び出し
                 DOM.video.play(); 
                 State.stream = stream;
                 DOM.status.innerText = "項目を選択してカメラを向けてください";
+
+                // カメラ起動成功後、初めて利用可能デバイスを列挙し、ドロップダウンを更新する
+                if (DOM.cameraSelect.options.length === 0) {
+                     // 起動したストリームの最初のトラックからデバイスIDを取得
+                     const activeTrack = stream.getVideoTracks()[0];
+                     const activeDeviceId = activeTrack ? activeTrack.getSettings().deviceId : null;
+                     
+                     await Actions.enumerateCameras(activeDeviceId);
+                }
                 
             } catch (err) {
                 console.error("Camera Access Error:", err);
-                // エラーの原因をコンソールに出力し、ユーザーにも分かりやすく伝える
-                alert(`カメラを起動できませんでした。\n原因: ${err.name} - ${err.message}\n(ヒント: HTTPS接続か、ブラウザのカメラ権限を確認してください。)`);
-                
-                // 失敗したらファイルモードへ誘導し、カメラループを止める
+                alert(`カメラを起動できませんでした。\n原因: ${err.name} - ${err.message}\n(ヒント: カメラへのアクセス権限を確認してください。設定が厳しすぎる可能性があります。)`);
                 Actions.switchMode(false);
             }
         },
@@ -369,7 +386,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             DOM.status.innerText = "データをGoogle Sheetsへ送信中...";
             
-            // 結果Inputの現在の値を取得して上書きする
             State.definitions.forEach(def => {
                 const input = document.getElementById(`res-${def.key}`);
                 if (input && input.value) {
@@ -379,16 +395,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
-                // GASはCORS設定により 'no-cors' で送信するが、成功を確認できない点に注意
                 mode: 'no-cors', 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'appendData', // GAS側で処理しやすいようにactionを追加
+                    action: 'appendData',
                     sheetName: State.sheetName,
                     data: State.ocrResults
                 })
             }).then(() => {
-                // no-corsモードではPromiseが解決するだけで、実際の成功/失敗は確認できない
                 DOM.status.innerText = "送信完了 (Sheetsを確認してください)";
                 alert("送信完了しました");
             }).catch((e) => {
@@ -398,33 +412,27 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         },
 
-        // 赤枠を描画し続けるループ
         drawGuideLoop: () => {
             const target = State.isCameraMode ? DOM.video : DOM.image;
             
-            // 要素の表示サイズを取得
             const w = target.offsetWidth;
             const h = target.offsetHeight;
 
-            // 要素が見えていて、サイズがある場合のみ描画
             if (w > 0 && h > 0 && target.style.display !== 'none') {
                 DOM.canvas.width = w;
                 DOM.canvas.height = h;
                 
-                // CSSでサイズを設定
                 DOM.canvas.style.width = `${w}px`;
                 DOM.canvas.style.height = `${h}px`;
 
                 const ctx = DOM.ctx;
                 ctx.clearRect(0, 0, w, h);
                 
-                // 赤枠の計算 (表示サイズの60% x 100px)
                 const rectW = w * 0.6;
                 const rectH = 100;
                 const x = (w - rectW) / 2;
                 const y = (h - rectH) / 2;
 
-                // 赤枠描画
                 ctx.strokeStyle = "red";
                 ctx.lineWidth = 3;
                 ctx.strokeRect(x, y, rectW, rectH);
@@ -440,22 +448,26 @@ document.addEventListener("DOMContentLoaded", () => {
     
     DOM.btnCamera.addEventListener('click', () => Actions.switchMode(true));
     DOM.btnFile.addEventListener('click', () => {
-        Actions.switchMode(false); // ファイルモードへ切替
-        DOM.fileInput.click();     // ファイル選択ダイアログを表示
+        Actions.switchMode(false);
+        DOM.fileInput.click();
     }); 
+
+    // ★新規追加: カメラ選択が変更されたときのイベントリスナー
+    DOM.cameraSelect.addEventListener('change', () => {
+        // 選択されたカメラIDを取得し、新しいストリームでカメラを再起動
+        Actions.startCamera(DOM.cameraSelect.value); 
+    });
 
     DOM.fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
         
-        // ファイルモード時に画像が選択されたら、画像を表示
         const reader = new FileReader();
         reader.onload = (ev) => {
             DOM.image.src = ev.target.result;
             DOM.image.onload = () => {
                  DOM.image.style.display = 'block';
                  DOM.status.innerText = "画像読込完了。項目ボタンを押してOCR実行";
-                 // 画像ロード後に赤枠描画を開始 (ループが止まっていた場合)
                  if (!State.rafId) Actions.drawGuideLoop();
             };
         };
@@ -475,17 +487,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 監視ループ (カメラモード時のみ定期的にOCR試行)
     setInterval(() => {
-        // OpenCVとOCRが準備完了していて、カメラモード、ターゲット選択済み、処理中でない場合
         if (State.isCameraMode && State.currentTarget && !State.isProcessing && isCvLoaded && State.isOCRReady) {
             Processor.execute();
         }
     }, 1500);
 
-    // 初期ロード時のステータス設定
     if (typeof cv === 'undefined') {
         DOM.status.innerText = "OpenCV.jsをロード中...";
     } else {
         DOM.status.innerText = "書類を選択してください";
     }
-
 });
